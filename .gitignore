@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Testing
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+.env*.local
+
+# Misc
+.DS_Store
+*.swp
+*.lock
+

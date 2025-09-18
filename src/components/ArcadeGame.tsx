@@ -27,10 +27,9 @@ const PLAYER_WIDTH = 80;
 const PLAYER_HEIGHT = 18;
 const PLAYER_SPEED = 320; // px/s
 
-export default function ArcadeGame() {
+export default function ArcadeGame({ muted, onToggleMute, onExit }: { muted: boolean; onToggleMute: () => void; onExit: () => void }) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
-	const [hud, setHud] = useState<GameState>({ score: 0, lives: 3, isRunning: false, isGameOver: false });
-	const [muted, setMuted] = useState<boolean>(false);
+    const [hud, setHud] = useState<GameState>({ score: 0, lives: 3, isRunning: false, isGameOver: false });
 
 	// Mutable refs for game loop
 	const playerX = useRef<number>(CANVAS_WIDTH / 2 - PLAYER_WIDTH / 2);
@@ -59,7 +58,15 @@ export default function ArcadeGame() {
 	const musicGain = useRef<GainNode | null>(null);
 	const sfxGain = useRef<GainNode | null>(null);
 
-	const resetGame = useCallback(() => {
+    // Best score
+    const bestScore = useRef<number>(0);
+
+    // VFX
+    type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number };
+    const particles = useRef<Particle[]>([]);
+    const shakeT = useRef<number>(0);
+
+    const resetGame = useCallback(() => {
 		playerX.current = CANVAS_WIDTH / 2 - PLAYER_WIDTH / 2;
 		items.current = [];
 		lastTs.current = null;
@@ -69,12 +76,19 @@ export default function ArcadeGame() {
 		score.current = 0;
 		lives.current = 3;
 		spawnTimer.current = 0;
+        particles.current = [];
+        shakeT.current = 0;
 		setHud({ score: 0, lives: 3, isRunning: true, isGameOver: false });
 	}, []);
 
-	const endGame = useCallback(() => {
+    const endGame = useCallback(() => {
 		running.current = false;
 		gameOver.current = true;
+        try {
+            const prev = Number(localStorage.getItem('bestScore') || 0);
+            bestScore.current = Math.max(prev, Math.floor(score.current));
+            localStorage.setItem('bestScore', String(bestScore.current));
+        } catch {}
 		setHud({ score: score.current, lives: lives.current, isRunning: false, isGameOver: true });
 	}, []);
 
@@ -99,7 +113,7 @@ export default function ArcadeGame() {
 		};
 	}, [resetGame]);
 
-	// Resize for devicePixelRatio
+    // Resize for devicePixelRatio
 	useEffect(() => {
 		const canvas = canvasRef.current;
 		if (!canvas) return;
@@ -141,7 +155,7 @@ export default function ArcadeGame() {
 		};
 	}, []);
 
-	// Setup audio graph lazily
+    // Setup audio graph lazily
 	const ensureAudio = useCallback(async () => {
 		if (audioCtx.current) return;
 		const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -178,9 +192,9 @@ export default function ArcadeGame() {
 			setTimeout(playLoop, beat * 1000 * notes.length * 0.5);
 		};
 		playLoop();
-	}, [muted]);
+    }, [muted]);
 
-	const playSfx = useCallback((type: 'eat' | 'hit') => {
+    const playSfx = useCallback((type: 'eat' | 'hit') => {
 		if (!audioCtx.current || !sfxGain.current || muted) return;
 		const t = audioCtx.current.currentTime;
 		const osc = audioCtx.current.createOscillator();
@@ -193,7 +207,7 @@ export default function ArcadeGame() {
 		osc.connect(gain).connect(sfxGain.current);
 		osc.start(t);
 		osc.stop(t + 0.25);
-	}, [muted]);
+    }, [muted]);
 
 	const spawnItem = useCallback(() => {
 		const isBomb = Math.random() < 0.22; // ~22% bomb
@@ -239,7 +253,7 @@ export default function ArcadeGame() {
 				spawnItem();
 			}
 
-			// Update items
+            // Update items
 			for (const it of items.current) {
 				it.y += it.vy * dt;
 			}
@@ -253,12 +267,37 @@ export default function ArcadeGame() {
 						if (it.type === 'bomb') {
 							lives.current -= 1;
 							playSfx('hit');
+                            shakeT.current = 0.25;
+                            // red burst
+                            for (let i = 0; i < 18; i++) {
+                                particles.current.push({
+                                    x: it.x,
+                                    y: playerRect.y,
+                                    vx: (Math.random() - 0.5) * 260,
+                                    vy: -Math.random() * 220,
+                                    life: 0.4 + Math.random() * 0.3,
+                                    color: 'rgba(239,68,68,0.9)',
+                                    size: 2 + Math.random() * 2,
+                                });
+                            }
 							if (lives.current <= 0) {
 								endGame();
 							}
 						} else {
 							score.current += 1;
 							playSfx('eat');
+                            // green confetti
+                            for (let i = 0; i < 12; i++) {
+                                particles.current.push({
+                                    x: it.x,
+                                    y: playerRect.y,
+                                    vx: (Math.random() - 0.5) * 180,
+                                    vy: -Math.random() * 160,
+                                    life: 0.5 + Math.random() * 0.4,
+                                    color: 'rgba(16,185,129,0.9)',
+                                    size: 2 + Math.random() * 2,
+                                });
+                            }
 						}
 						continue; // consumed
 					}
@@ -266,6 +305,18 @@ export default function ArcadeGame() {
 				if (it.y - it.r <= CANVAS_HEIGHT) kept.push(it);
 			}
 			items.current = kept;
+
+            // Update VFX
+            if (shakeT.current > 0) shakeT.current = Math.max(0, shakeT.current - dt);
+            const nextParticles: Particle[] = [];
+            for (const p of particles.current) {
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.vy += 600 * dt;
+                p.life -= dt;
+                if (p.life > 0) nextParticles.push(p);
+            }
+            particles.current = nextParticles;
 
 			// Draw
 			ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -284,10 +335,26 @@ export default function ArcadeGame() {
 				ctx.fillStyle = '#0b0b0c';
 				ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 			}
+            // Skyline silhouettes
+            const grd = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            grd.addColorStop(0, 'rgba(14,165,233,0.05)');
+            grd.addColorStop(1, 'rgba(14,165,233,0)');
+            ctx.fillStyle = grd;
+            for (let i = 0; i < 10; i++) {
+                const w = 20 + Math.random() * 40;
+                const h = 80 + Math.random() * 160;
+                const xPos = (i * 44 + (ts % 400)) % (CANVAS_WIDTH + 80) - 80;
+                ctx.fillRect(xPos, FLOOR_Y - h, w, h);
+            }
 			// Floor line
 			ctx.fillStyle = '#1f2937';
 			ctx.fillRect(0, FLOOR_Y, CANVAS_WIDTH, CANVAS_HEIGHT - FLOOR_Y);
-			// Player sprite
+            // Screen shake offset
+            const sx = shakeT.current > 0 ? (Math.random() - 0.5) * 8 * shakeT.current : 0;
+            const sy = shakeT.current > 0 ? (Math.random() - 0.5) * 6 * shakeT.current : 0;
+            ctx.save();
+            ctx.translate(sx, sy);
+            // Player sprite
 			if (assetsLoaded.current && imgPlayer.current) {
 				const pw = 96;
 				const ph = 64;
@@ -316,11 +383,21 @@ export default function ArcadeGame() {
 					}
 				}
 			}
+            // Particles (additive)
+            ctx.globalCompositeOperation = 'lighter';
+            for (const p of particles.current) {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.restore();
 
 			// HUD (drawn by React as well, but keep a minimal overlay)
 			setHud((prev) => ({ ...prev, score: score.current, lives: lives.current, isRunning: running.current, isGameOver: gameOver.current }));
-		},
-		[endGame, spawnItem]
+        },
+        [endGame, spawnItem, playSfx]
 	);
 
 	useEffect(() => {
@@ -333,52 +410,42 @@ export default function ArcadeGame() {
 		return () => cancelAnimationFrame(raf);
 	}, [step]);
 
-	return (
-		<div className="mx-auto my-6 w-[420px] select-none">
-			<div className="mb-2 flex items-baseline justify-between">
-				<div className="flex gap-6">
-					<div className="text-sm">Score: <span className="font-semibold tabular-nums">{hud.score}</span></div>
-					<div className="text-sm">Vies: <span className="font-semibold tabular-nums">{hud.lives}</span></div>
-				</div>
-				<div className="flex items-center gap-3">
-					<button
-						onClick={() => {
-							setMuted((m) => {
-								const next = !m;
-								if (musicGain.current) musicGain.current.gain.value = next ? 0 : 0.15;
-								if (sfxGain.current) sfxGain.current.gain.value = next ? 0 : 0.4;
-								return next;
-							});
-							ensureAudio();
-						}}
-						className="rounded bg-white/10 px-2 py-1 text-xs hover:bg-white/15"
-					>
-						{muted ? '🔇' : '🔊'}
-					</button>
-					<div className="text-xs opacity-70">← → bouger • Entrée jouer</div>
-				</div>
-			</div>
-			<div className="relative">
-				<canvas
-					ref={canvasRef}
-					onClick={() => {
-						if (!running.current) resetGame();
-						ensureAudio();
-					}}
-					className="block rounded border border-white/10 shadow"
-				/>
-				{!hud.isRunning && (
-					<div className="pointer-events-none absolute inset-0 grid place-items-center">
-						<div className="rounded bg-black/60 px-4 py-3 text-center">
-							<div className="text-lg font-semibold">
-								{hud.isGameOver ? 'Perdu !' : 'Kebab Tycoon – Arcade'}
-							</div>
-							<div className="text-sm opacity-80">Entrée ou clic pour {hud.isGameOver ? 'recommencer' : 'commencer'}</div>
-						</div>
-					</div>
-				)}
-			</div>
-		</div>
-	);
+    return (
+        <div className="mx-auto my-6 w-[420px] select-none">
+            <div className="mb-2 flex items-center justify-between">
+                <div className="flex gap-4">
+                    <div className="text-sm">Score: <span className="font-semibold tabular-nums">{hud.score}</span></div>
+                    <div className="text-sm">Vies: <span className="font-semibold tabular-nums">{hud.lives}</span></div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => { onToggleMute(); ensureAudio(); if (musicGain.current) musicGain.current.gain.value = muted ? 0.15 : 0; if (sfxGain.current) sfxGain.current.gain.value = muted ? 0.4 : 0; }}
+                        className="rounded bg-white/10 px-2 py-1 text-xs hover:bg-white/15"
+                    >
+                        {muted ? '🔇' : '🔊'}
+                    </button>
+                    <button onClick={onExit} className="rounded bg-white/10 px-2 py-1 text-xs hover:bg-white/15">Menu</button>
+                </div>
+            </div>
+            <div className="relative">
+                <canvas
+                    ref={canvasRef}
+                    onClick={() => { if (!running.current) resetGame(); ensureAudio(); }}
+                    className="block rounded border border-white/10 shadow"
+                />
+                {!hud.isRunning && (
+                    <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                        <div className="rounded bg-black/60 px-4 py-3 text-center">
+                            <div className="text-lg font-semibold">
+                                {hud.isGameOver ? 'Perdu !' : 'Kebab Tycoon – Arcade'}
+                            </div>
+                            <div className="text-sm opacity-80">Entrée ou clic pour {hud.isGameOver ? 'recommencer' : 'commencer'}</div>
+                            <div className="mt-2 text-xs opacity-70">Meilleur score: {bestScore.current || 0}</div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 }
 

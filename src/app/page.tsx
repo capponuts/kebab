@@ -13,7 +13,7 @@ export default function HomePage() {
             {mode === 'menu' ? (
                 <StartMenu onStart={() => setMode('game')} muted={muted} onToggleMute={() => setMuted((m) => !m)} />
             ) : (
-                <ArcadeGame />
+                <ArcadeGame muted={muted} onToggleMute={() => setMuted((m) => !m)} onExit={() => setMode('menu')} />
             )}
         </main>
     );

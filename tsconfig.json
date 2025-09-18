@@ -23,6 +23,10 @@
         "src/*"
       ]
     },
+    "types": [
+      "@react-three/fiber",
+      "three"
+    ],
     "plugins": [
       {
         "name": "next"
@@ -33,6 +37,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "**/*.d.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [

@@ -18,3 +18,9 @@ body {
   background: var(--background);
 }
 
+.scanline-overlay {
+	background-image: url('/scanlines.svg');
+	background-size: cover;
+	opacity: 0.35;
+}
+

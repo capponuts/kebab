@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="pita" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8e1b5"/>
+      <stop offset="100%" stop-color="#e0b97a"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(8,6)">
+    <path d="M4 8 C4 3 12 0 24 0 C36 0 44 3 44 8 L44 30 C44 37 36 42 24 42 C12 42 4 37 4 30 Z" fill="url(#pita)" stroke="#c08f4f" stroke-width="2"/>
+    <rect x="8" y="10" width="32" height="6" rx="3" fill="#d97706"/>
+    <rect x="10" y="16" width="28" height="4" rx="2" fill="#16a34a"/>
+    <rect x="10" y="21" width="28" height="3" rx="1.5" fill="#ef4444"/>
+    <rect x="10" y="25" width="28" height="4" rx="2" fill="#22c55e"/>
+    <rect x="12" y="30" width="24" height="3" rx="1.5" fill="#eab308"/>
+  </g>
+</svg>
